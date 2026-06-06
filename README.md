@@ -30,6 +30,8 @@ cd google-map-mcp
 
 The setup script handles everything: dependency installation, build, and config generation for Claude Code and Claude Desktop.
 
+> **Prefer to let an AI agent do the setup?** See [docs/setup-prompts.md](docs/setup-prompts.md) for copy-paste prompts for Claude Code (local) and Hermes on a VPS (Docker). Paste the prompt into your agent and it will guide you through the rest.
+
 ---
 
 ## Manual setup
