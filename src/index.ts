@@ -3,6 +3,7 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { SSEServerTransport } from "@modelcontextprotocol/sdk/server/sse.js";
 import { z } from "zod";
 import http from "http";
+import crypto from "crypto";
 import dotenv from "dotenv";
 
 import { registerSearchNearbyTool } from "./tools/search-nearby";
@@ -146,10 +147,33 @@ server.tool(
 
   if (mode === "sse") {
     const PORT = parseInt(process.env.PORT ?? "3000", 10);
+    const authToken = process.env.MCP_AUTH_TOKEN ?? "";
+    const MAX_BODY_BYTES = 4 * 1024 * 1024; // 4 MB
+
+    if (!authToken) {
+      process.stderr.write(
+        "WARNING: MCP_AUTH_TOKEN is not set — SSE endpoint is unauthenticated. Set it in env to secure the server.\n"
+      );
+    }
+
+    function isAuthorized(req: http.IncomingMessage): boolean {
+      if (!authToken) return true;
+      const header = req.headers["authorization"] ?? "";
+      const provided = header.startsWith("Bearer ") ? header.slice(7) : "";
+      if (provided.length !== authToken.length) return false;
+      return crypto.timingSafeEqual(Buffer.from(provided), Buffer.from(authToken));
+    }
+
     // Map of sessionId → active transport so we can route POST messages correctly
     const sessions = new Map<string, SSEServerTransport>();
 
     const httpServer = http.createServer(async (req, res) => {
+      if (!isAuthorized(req)) {
+        res.writeHead(401, { "Content-Type": "text/plain" });
+        res.end("Unauthorized");
+        return;
+      }
+
       const url = new URL(req.url ?? "/", `http://localhost:${PORT}`);
 
       if (req.method === "GET" && url.pathname === "/sse") {
@@ -166,10 +190,26 @@ server.tool(
           res.end("Session not found");
           return;
         }
-        // Read body and pass as parsedBody so no express dependency needed
+
+        // Read body with a hard 4 MB cap to prevent DoS
+        let size = 0;
         const chunks: Buffer[] = [];
-        req.on("data", (chunk) => chunks.push(chunk as Buffer));
+        let aborted = false;
+
+        req.on("data", (chunk: Buffer) => {
+          size += chunk.length;
+          if (size > MAX_BODY_BYTES) {
+            aborted = true;
+            req.destroy();
+            res.writeHead(413, { "Content-Type": "text/plain" });
+            res.end("Request body too large");
+            return;
+          }
+          chunks.push(chunk);
+        });
+
         req.on("end", async () => {
+          if (aborted) return;
           try {
             const parsedBody = JSON.parse(Buffer.concat(chunks).toString());
             await transport.handlePostMessage(req, res, parsedBody);
