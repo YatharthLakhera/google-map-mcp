@@ -139,6 +139,59 @@ Place details and photos are cached in SQLite at `~/.google-map-mcp/cache.db` (o
 
 ---
 
+## Deploying on a VPS (Docker)
+
+If you have another AI agent (e.g. Hermes) running in Docker on the same VPS, run the MCP server as a **sidecar container on the same internal Docker network**. Hermes connects to it via `http://google-maps-mcp:3000/sse` — nothing is exposed to the internet.
+
+### 1. Find Hermes's Docker network
+
+```bash
+docker network ls
+# Look for the network your Hermes container is on
+docker inspect <hermes-container-name> | grep NetworkMode
+```
+
+### 2. Create your `.env` on the VPS
+
+```bash
+cp env.docker.example .env
+# Edit .env — set GOOGLE_PLACES_API_KEY and HERMES_NETWORK
+```
+
+### 3. Start the container
+
+```bash
+docker compose up -d
+docker compose logs -f   # confirm it says "SSE server listening on :3000"
+```
+
+### 4. Connect Hermes
+
+Point Hermes's MCP config at the internal URL:
+
+```
+http://google-maps-mcp:3000/sse
+```
+
+No port needs to be published to the host — `expose: 3000` makes it reachable only within the Docker network.
+
+### Updating after a code change
+
+```bash
+git pull
+docker compose build --no-cache
+docker compose up -d
+```
+
+### Transport modes
+
+| `TRANSPORT` env | When to use |
+|-----------------|-------------|
+| `stdio` (default) | Local dev — Claude Code / Claude Desktop spawn it directly |
+| `sse` | Docker / VPS — agent connects via `http://<host>:<port>/sse` |
+
+---
+
 ## Development
 
 ```bash

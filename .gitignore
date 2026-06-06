@@ -3,3 +3,5 @@ dist/
 .env
 .claude/settings.json
 .claude/context-memory/
+# Docker volumes / build artifacts
+*.db

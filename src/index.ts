@@ -1,6 +1,8 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import { SSEServerTransport } from "@modelcontextprotocol/sdk/server/sse.js";
 import { z } from "zod";
+import http from "http";
 import dotenv from "dotenv";
 
 import { registerSearchNearbyTool } from "./tools/search-nearby";
@@ -140,6 +142,55 @@ server.tool(
 );
 
 (async () => {
-  const transport = new StdioServerTransport();
-  await server.connect(transport);
+  const mode = process.env.TRANSPORT ?? "stdio";
+
+  if (mode === "sse") {
+    const PORT = parseInt(process.env.PORT ?? "3000", 10);
+    // Map of sessionId → active transport so we can route POST messages correctly
+    const sessions = new Map<string, SSEServerTransport>();
+
+    const httpServer = http.createServer(async (req, res) => {
+      const url = new URL(req.url ?? "/", `http://localhost:${PORT}`);
+
+      if (req.method === "GET" && url.pathname === "/sse") {
+        const transport = new SSEServerTransport("/message", res);
+        sessions.set(transport.sessionId, transport);
+        req.on("close", () => sessions.delete(transport.sessionId));
+        await server.connect(transport);
+
+      } else if (req.method === "POST" && url.pathname === "/message") {
+        const sessionId = url.searchParams.get("sessionId") ?? "";
+        const transport = sessions.get(sessionId);
+        if (!transport) {
+          res.writeHead(404, { "Content-Type": "text/plain" });
+          res.end("Session not found");
+          return;
+        }
+        // Read body and pass as parsedBody so no express dependency needed
+        const chunks: Buffer[] = [];
+        req.on("data", (chunk) => chunks.push(chunk as Buffer));
+        req.on("end", async () => {
+          try {
+            const parsedBody = JSON.parse(Buffer.concat(chunks).toString());
+            await transport.handlePostMessage(req, res, parsedBody);
+          } catch {
+            res.writeHead(400, { "Content-Type": "text/plain" });
+            res.end("Invalid JSON");
+          }
+        });
+
+      } else {
+        res.writeHead(404);
+        res.end("Not found");
+      }
+    });
+
+    httpServer.listen(PORT, () => {
+      process.stderr.write(`google-maps-mcp SSE server listening on :${PORT}\n`);
+    });
+
+  } else {
+    const transport = new StdioServerTransport();
+    await server.connect(transport);
+  }
 })();
