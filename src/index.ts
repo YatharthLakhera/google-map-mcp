@@ -13,12 +13,30 @@ import { registerGetPlacePhotosTool } from "./tools/get-place-photos";
 import { registerFindLowVisibilityTool } from "./tools/find-low-visibility";
 import { getCacheStats, clearExpiredCache, getRateLimitStatus } from "./cache/db";
 
+// New enriched tools from mcp-google-map
+import { registerGeocodeTool } from "./tools/maps/geocode";
+import { registerReverseGeocodeTool } from "./tools/maps/reverseGeocode";
+import { registerDirectionsTool } from "./tools/maps/directions";
+import { registerDistanceMatrixTool } from "./tools/maps/distanceMatrix";
+import { registerElevationTool } from "./tools/maps/elevation";
+import { registerSearchPlacesTool } from "./tools/maps/searchPlaces";
+import { registerTimezoneTool } from "./tools/maps/timezone";
+import { registerWeatherTool } from "./tools/maps/weather";
+import { registerAirQualityTool } from "./tools/maps/airQuality";
+import { registerStaticMapTool } from "./tools/maps/staticMap";
+import { registerBatchGeocodeTool } from "./tools/maps/batchGeocode";
+import { registerSearchAlongRouteTool } from "./tools/maps/searchAlongRoute";
+import { registerExploreAreaTool } from "./tools/maps/exploreArea";
+import { registerPlanRouteTool } from "./tools/maps/planRoute";
+import { registerComparePlacesTool } from "./tools/maps/comparePlaces";
+import { registerLocalRankTrackerTool } from "./tools/maps/localRankTracker";
+
 dotenv.config();
 
-const apiKey = process.env.GOOGLE_PLACES_API_KEY;
+const apiKey = process.env.GOOGLE_PLACES_API_KEY || process.env.GOOGLE_MAPS_API_KEY;
 if (!apiKey) {
   process.stderr.write(
-    "GOOGLE_PLACES_API_KEY environment variable is required\n"
+    "GOOGLE_PLACES_API_KEY (or GOOGLE_MAPS_API_KEY) environment variable is required\n"
   );
   process.exit(1);
 }
@@ -28,12 +46,30 @@ const server = new McpServer({
   version: "1.0.0",
 });
 
-// Core place discovery tools
+// Core place discovery tools (Places API New — raw fetch)
 registerSearchNearbyTool(server, apiKey);
 registerSearchTextTool(server, apiKey);
 registerGetPlaceDetailsTool(server, apiKey);
 registerGetPlacePhotosTool(server, apiKey);
 registerFindLowVisibilityTool(server, apiKey);
+
+// Enriched tools: geocoding, routing, environmental, composite
+registerGeocodeTool(server, apiKey);
+registerReverseGeocodeTool(server, apiKey);
+registerDirectionsTool(server, apiKey);
+registerDistanceMatrixTool(server, apiKey);
+registerElevationTool(server, apiKey);
+registerSearchPlacesTool(server, apiKey);
+registerTimezoneTool(server, apiKey);
+registerWeatherTool(server, apiKey);
+registerAirQualityTool(server, apiKey);
+registerStaticMapTool(server, apiKey);
+registerBatchGeocodeTool(server, apiKey);
+registerSearchAlongRouteTool(server, apiKey);
+registerExploreAreaTool(server, apiKey);
+registerPlanRouteTool(server, apiKey);
+registerComparePlacesTool(server, apiKey);
+registerLocalRankTrackerTool(server, apiKey);
 
 // Rate limit status tool
 server.tool(
